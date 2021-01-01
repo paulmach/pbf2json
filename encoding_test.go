@@ -4,13 +4,13 @@ import (
 	"math"
 	"testing"
 
-	"github.com/qedus/osmpbf"
+	"github.com/paulmach/osm"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestEncodingSimple(t *testing.T) {
 
-	var node = &osmpbf.Node{ID: 100, Lat: -50, Lon: 77}
+	var node = &osm.Node{ID: 100, Lat: -50, Lon: 77}
 	var expectedBytes = []byte{0xc0, 0x49, 0x0, 0x0, 0x0, 0x0, 0x40, 0x53, 0x40, 0x0, 0x0, 0x0}
 	var expectedLatlon = map[string]string{"lon": "77.0000000", "lat": "-50.0000000"}
 
@@ -26,7 +26,7 @@ func TestEncodingSimple(t *testing.T) {
 
 func TestEncodingFloatPrecision(t *testing.T) {
 
-	var node = &osmpbf.Node{ID: 100, Lat: -50.555555555, Lon: 77.777777777}
+	var node = &osm.Node{ID: 100, Lat: -50.555555555, Lon: 77.777777777}
 	var expectedBytes = []byte{0xc0, 0x49, 0x47, 0x1c, 0x71, 0xc5, 0x40, 0x53, 0x71, 0xc7, 0x1c, 0x70}
 	var expectedLatlon = map[string]string{"lon": "77.7777778", "lat": "-50.5555556"}
 
@@ -42,8 +42,8 @@ func TestEncodingFloatPrecision(t *testing.T) {
 
 func TestEncodingBitmaskValues(t *testing.T) {
 
-	var tags = map[string]string{"entrance": "main", "wheelchair": "yes"}
-	var node = &osmpbf.Node{ID: 100, Lat: -50, Lon: 77, Tags: tags}
+	var tags = osm.Tags{{Key: "entrance", Value: "main"}, {Key: "wheelchair", Value: "yes"}}
+	var node = &osm.Node{ID: 100, Lat: -50, Lon: 77, Tags: tags}
 	var expectedBytes = []byte{0xc0, 0x49, 0x0, 0x0, 0x0, 0x0, 0x40, 0x53, 0x40, 0x0, 0x0, 0x0, 0xa0}
 	var expectedLatlon = map[string]string{"lon": "77.0000000", "lat": "-50.0000000", "entrance": "2", "wheelchair": "2"}
 
@@ -59,7 +59,10 @@ func TestEncodingBitmaskValues(t *testing.T) {
 
 func TestEncodingAndDecodingIdsToBytes(t *testing.T) {
 
-	var ids = []int64{0, 100, 100000, 100000000, math.MaxInt64}
+	var ids = osm.WayNodes{
+		{ID: 0}, {ID: 100}, {ID: 100000},
+		{ID: 100000000}, {ID: math.MaxInt64},
+	}
 
 	// encode
 	var encoded = idSliceToBytes(ids)
@@ -72,12 +75,12 @@ func TestEncodingAndDecodingIdsToBytes(t *testing.T) {
 }
 
 func BenchmarkBytesToLatLon(b *testing.B) {
-	node := &osmpbf.Node{
+	node := &osm.Node{
 		ID:  123,
 		Lat: 12.1234,
 		Lon: -122.1234,
-		Tags: map[string]string{
-			"entrance": "main",
+		Tags: osm.Tags{
+			{Key: "entrance", Value: "main"},
 		},
 	}
 	_, data := nodeToBytes(node)
@@ -90,12 +93,12 @@ func BenchmarkBytesToLatLon(b *testing.B) {
 }
 
 func BenchmarkNodeToBytes(b *testing.B) {
-	node := &osmpbf.Node{
+	node := &osm.Node{
 		ID:  123,
 		Lat: 12.1234,
 		Lon: -122.1234,
-		Tags: map[string]string{
-			"entrance": "main",
+		Tags: osm.Tags{
+			{Key: "entrance", Value: "main"},
 		},
 	}
 
@@ -107,18 +110,18 @@ func BenchmarkNodeToBytes(b *testing.B) {
 }
 
 func BenchmarkIdSliceToBytes(b *testing.B) {
-	ids := make([]int64, 100)
+	nodes := make(osm.WayNodes, 100)
 
 	b.ReportAllocs()
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		idSliceToBytes(ids)
+		idSliceToBytes(nodes)
 	}
 }
 
 func BenchmarkBytesToIDSlice(b *testing.B) {
-	ids := make([]int64, 100)
-	data := idSliceToBytes(ids)
+	nodes := make(osm.WayNodes, 100)
+	data := idSliceToBytes(nodes)
 
 	b.ReportAllocs()
 	b.ResetTimer()
