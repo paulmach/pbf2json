@@ -30,6 +30,7 @@ type settings struct {
 }
 
 var emptyLatLons = make([]map[string]string, 0)
+var offsetStartWays int64
 
 func getSettings() settings {
 
@@ -93,7 +94,7 @@ func main() {
 	// no-op if no relation members of type 'way' present in mask
 	if !masks.RelWays.Empty() {
 		// === potential second pass (indexing) to index members of relations ===
-		file.Seek(io.SeekStart, 0) // rewind file
+		file.Seek(offsetStartWays, io.SeekStart) // rewind file
 		idxRelationsDecoder := osmpbf.New(context.Background(), file, runtime.GOMAXPROCS(-1))
 
 		// index relation member IDs in bitmasks
@@ -102,7 +103,7 @@ func main() {
 	}
 
 	// === final pass (printing json) ===
-	file.Seek(io.SeekStart, 0) // rewind file
+	file.Seek(0, io.SeekStart) // rewind file
 	decoder := osmpbf.New(context.Background(), file, runtime.GOMAXPROCS(-1))
 
 	// print json
@@ -119,6 +120,10 @@ func index(s *osmpbf.Scanner, masks *BitmaskMap, config settings) {
 			}
 
 		case *osm.Way:
+			if offsetStartWays == 0 {
+				offsetStartWays = s.PreviousFullyScannedBytes()
+			}
+
 			if hasTags(v.Tags) && containsValidTags(v.Tags, config.Tags) {
 				masks.Ways.Insert(int64(v.ID))
 				for _, node := range v.Nodes {
@@ -165,7 +170,6 @@ func index(s *osmpbf.Scanner, masks *BitmaskMap, config settings) {
 }
 
 func indexRelationMembers(s *osmpbf.Scanner, masks *BitmaskMap, config settings) {
-	// TODO: set to only scan ways
 	for s.Scan() {
 		switch v := s.Object().(type) {
 		case *osm.Way:
@@ -174,18 +178,19 @@ func indexRelationMembers(s *osmpbf.Scanner, masks *BitmaskMap, config settings)
 					masks.RelNodes.Insert(int64(node.ID))
 				}
 			}
+		case *osm.Relation:
+			break
 			// support for super-relations
-			// case *osm.Relation:
-			// 	if masks.RelRelation.Has(int64(v.ID)) {
-			// 		for _, member := range v.Members {
-			// 			switch member.Type {
-			// 			case "node": // node
-			// 				masks.RelNodes.Insert(member.Ref)
-			// 			case "way": // way
-			// 				masks.RelWays.Insert(member.Ref)
-			// 			}
+			// if masks.RelRelation.Has(int64(v.ID)) {
+			// 	for _, member := range v.Members {
+			// 		switch member.Type {
+			// 		case "node": // node
+			// 			masks.RelNodes.Insert(member.Ref)
+			// 		case "way": // way
+			// 			masks.RelWays.Insert(member.Ref)
 			// 		}
 			// 	}
+			// }
 		}
 	}
 
